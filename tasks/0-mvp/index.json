@@ -43,7 +43,9 @@
     {
       "phase": 5,
       "name": "call-recorder",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-05T02:54:54+0900",
+      "completed_at": "2026-04-05T02:58:30+0900"
     },
     {
       "phase": 6,
