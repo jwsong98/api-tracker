@@ -1,0 +1,25 @@
+{
+  "edgeId": 2,
+  "fromNode": 1,
+  "toNode": 2,
+  "timestamp": "2026-04-04T17:57:52.123Z",
+  "request": {
+    "method": "GET",
+    "path": "/api/users/aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee",
+    "headers": {},
+    "template": {
+      "path": "/api/users/$ref(node.1.response.id)"
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {},
+    "body": {
+      "id": "aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee",
+      "name": "홍길동"
+    }
+  },
+  "refs": [],
+  "warnings": [],
+  "authProfile": ""
+}
