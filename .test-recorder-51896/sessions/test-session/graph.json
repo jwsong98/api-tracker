@@ -1,0 +1,30 @@
+{
+  "nodes": [
+    {
+      "id": 0,
+      "label": "seed"
+    },
+    {
+      "id": 1,
+      "label": "POST /api/users → 201"
+    },
+    {
+      "id": 2,
+      "label": "GET /api/users/aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee → 200"
+    }
+  ],
+  "edges": [
+    {
+      "id": 1,
+      "from": 0,
+      "to": 1,
+      "file": "001.json"
+    },
+    {
+      "id": 2,
+      "from": 1,
+      "to": 2,
+      "file": "002.json"
+    }
+  ]
+}

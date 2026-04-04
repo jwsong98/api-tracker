@@ -1,0 +1,17 @@
+{
+  "node.1.response.id": {
+    "value": "aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee",
+    "origin": "edge.1",
+    "jsonPath": "id"
+  },
+  "node.2.response.id": {
+    "value": "aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee",
+    "origin": "edge.2",
+    "jsonPath": "id"
+  },
+  "node.2.response.name": {
+    "value": "홍길동",
+    "origin": "edge.2",
+    "jsonPath": "name"
+  }
+}

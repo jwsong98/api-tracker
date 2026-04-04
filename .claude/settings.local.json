@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); p=d['phases'][7]; p['status']='pending'; del p['started_at']; json.dump\\(d,open\\('tasks/0-mvp/index.json','w',encoding='utf-8'\\),indent=2,ensure_ascii=False\\)\")",
+      "Bash(python3 scripts/run_phases.py 0-mvp)"
+    ]
+  }
+}
