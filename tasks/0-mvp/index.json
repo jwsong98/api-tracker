@@ -50,7 +50,9 @@
     {
       "phase": 6,
       "name": "replay-diff",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-05T02:58:43+0900",
+      "completed_at": "2026-04-05T03:05:00+0900"
     },
     {
       "phase": 7,
