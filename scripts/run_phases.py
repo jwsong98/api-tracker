@@ -42,12 +42,12 @@ def now_iso() -> str:
 
 
 def load_index(index_file: Path) -> dict:
-    with open(index_file, "r") as f:
+    with open(index_file, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def save_index(index_file: Path, data: dict):
-    with open(index_file, "w") as f:
+    with open(index_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
@@ -82,7 +82,7 @@ def load_phase_prompt(task_dir: Path, phase_num: int) -> str:
     if not phase_file.exists():
         print(f"ERROR: {phase_file} not found")
         sys.exit(1)
-    return phase_file.read_text()
+    return phase_file.read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -279,7 +279,7 @@ def run_phase(task_dir: Path, phase: dict, preamble: str, gh_env: dict[str, str]
         "stderr": result.stderr,
     }
 
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
 
     if result.returncode != 0:
