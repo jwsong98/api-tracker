@@ -22,7 +22,9 @@
     {
       "phase": 2,
       "name": "session-mgmt",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-05T02:46:37+0900",
+      "completed_at": "2026-04-05T02:48:40+0900"
     },
     {
       "phase": 3,
