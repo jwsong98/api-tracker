@@ -5,13 +5,47 @@
   "totalPhases": 8,
   "created_at": "2026-04-05T22:00:00+0900",
   "phases": [
-    { "phase": 0, "name": "project-init", "status": "pending" },
-    { "phase": 1, "name": "storage-config", "status": "pending" },
-    { "phase": 2, "name": "session-mgmt", "status": "pending" },
-    { "phase": 3, "name": "auth", "status": "pending" },
-    { "phase": 4, "name": "binding-engine", "status": "pending" },
-    { "phase": 5, "name": "call-recorder", "status": "pending" },
-    { "phase": 6, "name": "replay-diff", "status": "pending" },
-    { "phase": 7, "name": "cli-integration", "status": "pending" }
+    {
+      "phase": 0,
+      "name": "project-init",
+      "status": "completed",
+      "started_at": "2026-04-05T02:42:15+0900",
+      "completed_at": "2026-04-05T22:30:00+0900"
+    },
+    {
+      "phase": 1,
+      "name": "storage-config",
+      "status": "pending"
+    },
+    {
+      "phase": 2,
+      "name": "session-mgmt",
+      "status": "pending"
+    },
+    {
+      "phase": 3,
+      "name": "auth",
+      "status": "pending"
+    },
+    {
+      "phase": 4,
+      "name": "binding-engine",
+      "status": "pending"
+    },
+    {
+      "phase": 5,
+      "name": "call-recorder",
+      "status": "pending"
+    },
+    {
+      "phase": 6,
+      "name": "replay-diff",
+      "status": "pending"
+    },
+    {
+      "phase": 7,
+      "name": "cli-integration",
+      "status": "pending"
+    }
   ]
 }
