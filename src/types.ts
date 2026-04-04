@@ -70,7 +70,7 @@ export interface EdgeResponse {
 export interface Ref {
   value: unknown;
   source: string;
-  boundAs: string;
+  boundAs: string | null;
 }
 
 export interface Edge {
