@@ -1,17 +1,63 @@
-import { diff } from "deep-diff";
 import type { EdgeResponse } from "../types.js";
+
+/**
+ * Compare two values structurally: same key structure and same value types.
+ * Returns true if structures match (values may differ).
+ */
+function structurallyEqual(a: unknown, b: unknown): boolean {
+  if (a === null && b === null) return true;
+  if (a === null || b === null) return false;
+
+  const typeA = typeof a;
+  const typeB = typeof b;
+  if (typeA !== typeB) return false;
+
+  if (typeA !== "object") return true; // primitives: same type is enough
+
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!structurallyEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+
+  const objA = a as Record<string, unknown>;
+  const objB = b as Record<string, unknown>;
+  const keysA = Object.keys(objA).sort();
+  const keysB = Object.keys(objB).sort();
+
+  if (keysA.length !== keysB.length) return false;
+  for (let i = 0; i < keysA.length; i++) {
+    if (keysA[i] !== keysB[i]) return false;
+    if (!structurallyEqual(objA[keysA[i]], objB[keysB[i]])) return false;
+  }
+  return true;
+}
 
 export function diffResponses(
   original: EdgeResponse,
   actual: EdgeResponse,
 ): { match: boolean; diff: any } {
-  const left = { status: original.status, body: original.body };
-  const right = { status: actual.status, body: actual.body };
-  const result = diff(left, right);
-  return {
-    match: result == null,
-    diff: result ?? null,
-  };
+  // Status must match exactly
+  if (original.status !== actual.status) {
+    return {
+      match: false,
+      diff: [{ kind: "E", path: ["status"], lhs: original.status, rhs: actual.status }],
+    };
+  }
+
+  // Body: structural comparison (key structure + value types)
+  if (!structurallyEqual(original.body, actual.body)) {
+    return {
+      match: false,
+      diff: [{ kind: "E", path: ["body"], lhs: original.body, rhs: actual.body }],
+    };
+  }
+
+  return { match: true, diff: null };
 }
 
 export function formatDiff(

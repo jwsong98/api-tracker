@@ -37,7 +37,7 @@ describe("diffResponses", () => {
     expect(statusDiff.rhs).toBe(400);
   });
 
-  it("should return match:false when body field differs", () => {
+  it("should return match:true when body values differ but structure is same", () => {
     const original: EdgeResponse = {
       status: 200,
       headers: {},
@@ -46,18 +46,43 @@ describe("diffResponses", () => {
     const actual: EdgeResponse = {
       status: 200,
       headers: {},
-      body: { id: "abc", name: "김철수" },
+      body: { id: "xyz", name: "김철수" },
+    };
+    const result = diffResponses(original, actual);
+    expect(result.match).toBe(true);
+    expect(result.diff).toBeNull();
+  });
+
+  it("should return match:false when body structure differs (missing key)", () => {
+    const original: EdgeResponse = {
+      status: 200,
+      headers: {},
+      body: { id: "abc", name: "홍길동" },
+    };
+    const actual: EdgeResponse = {
+      status: 200,
+      headers: {},
+      body: { id: "abc" },
     };
     const result = diffResponses(original, actual);
     expect(result.match).toBe(false);
     expect(result.diff).not.toBeNull();
+  });
 
-    const nameDiff = result.diff.find(
-      (d: any) => d.path?.includes("name"),
-    );
-    expect(nameDiff).toBeDefined();
-    expect(nameDiff.lhs).toBe("홍길동");
-    expect(nameDiff.rhs).toBe("김철수");
+  it("should return match:false when body value type differs", () => {
+    const original: EdgeResponse = {
+      status: 200,
+      headers: {},
+      body: { id: "abc", count: 5 },
+    };
+    const actual: EdgeResponse = {
+      status: 200,
+      headers: {},
+      body: { id: "abc", count: "five" },
+    };
+    const result = diffResponses(original, actual);
+    expect(result.match).toBe(false);
+    expect(result.diff).not.toBeNull();
   });
 
   it("should ignore header differences", () => {
@@ -96,7 +121,7 @@ describe("formatDiff", () => {
     expect(text).toContain("Status: 200 → 400");
   });
 
-  it("should format changed body fields", () => {
+  it("should format changed body fields when structure differs", () => {
     const original: EdgeResponse = {
       status: 200,
       headers: {},
@@ -105,12 +130,10 @@ describe("formatDiff", () => {
     const actual: EdgeResponse = {
       status: 200,
       headers: {},
-      body: { name: "김철수" },
+      body: { name: "홍길동", extra: true },
     };
     const { diff } = diffResponses(original, actual);
     const text = formatDiff(original, actual, diff);
     expect(text).toContain("Changed");
-    expect(text).toContain("홍길동");
-    expect(text).toContain("김철수");
   });
 });

@@ -277,11 +277,10 @@ describe("replayToNode", () => {
     expect(result.replayed[1].actualStatus).toBe(400);
   });
 
-  it("should record bindingUpdates when UUID changes on replay", async () => {
+  it("should succeed with bindingUpdates when UUID changes on replay (structural match)", async () => {
     // Edge response has UUID "aaa". On replay, server returns "bbb".
-    // deep-diff will detect a body difference → diverged.
-    // But bindingUpdates should NOT be populated since divergence stops before extraction.
-    // This test verifies the diverged result includes the diff showing the UUID change.
+    // Structural comparison: same keys + same types → match.
+    // bindingUpdates should record the UUID change.
     const edge1 = makeEdge({
       edgeId: 1,
       fromNode: 0,
@@ -309,7 +308,18 @@ describe("replayToNode", () => {
         ],
         edges: [{ id: 1, from: 0, to: 1, file: "001.json" }],
       },
-      bindings: {},
+      bindings: {
+        "node.1.response.id": {
+          value: "aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee",
+          origin: "edge.1",
+          jsonPath: "id",
+        },
+        "node.1.response.name": {
+          value: "홍길동",
+          origin: "edge.1",
+          jsonPath: "name",
+        },
+      },
       edges: [edge1],
     });
 
@@ -324,15 +334,13 @@ describe("replayToNode", () => {
       config: testConfig,
     });
 
-    expect(result.status).toBe("diverged");
-    expect(result.divergedAt).toBe(1);
-    expect(result.diff).not.toBeNull();
-    // diff should contain the UUID change
-    const diffItems = result.diff as Array<{ kind: string; path: string[]; lhs: any; rhs: any }>;
-    const idChange = diffItems.find((d) => d.path?.includes("id"));
-    expect(idChange).toBeDefined();
-    expect(idChange!.lhs).toBe("aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee");
-    expect(idChange!.rhs).toBe(newUuid);
+    expect(result.status).toBe("success");
+    expect(result.divergedAt).toBeUndefined();
+    // bindingUpdates should show the UUID was updated
+    expect(result.bindingUpdates["node.1.response.id"]).toEqual({
+      old: "aaaaaaaa-bbbb-4ccc-9ddd-eeeeeeeeeeee",
+      new: newUuid,
+    });
   });
 
   it("should throw error for non-existent targetNode", async () => {

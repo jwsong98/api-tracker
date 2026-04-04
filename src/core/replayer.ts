@@ -111,6 +111,9 @@ export async function replayToNode(options: {
   }
 
   // 4. Sequential replay
+  // Load original bindings for comparison (to detect binding changes)
+  const originalBindings: Bindings =
+    (await readJson<Bindings>(`sessions/${session}/bindings.json`)) ?? {};
   let bindings: Bindings = {};
   const replayed: ReplayResult["replayed"] = [];
   const bindingUpdates: Record<string, { old: string; new: string }> = {};
@@ -167,7 +170,8 @@ export async function replayToNode(options: {
     // e. Extract bindings from new response and update
     const newBindings = extractBindings(edge.edgeId, edge.toNode, actual.body);
     for (const [key, entry] of Object.entries(newBindings)) {
-      const oldValue = bindings[key];
+      // Compare against original session bindings or previously replayed bindings
+      const oldValue = originalBindings[key] ?? bindings[key];
       if (oldValue && String(oldValue.value) !== String(entry.value)) {
         bindingUpdates[key] = {
           old: String(oldValue.value),
