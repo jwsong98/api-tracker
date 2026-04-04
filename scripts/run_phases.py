@@ -8,6 +8,7 @@ Usage: python3 run-phases.py <task-dir>
 Example: python3 run-phases.py 0-mvp
 """
 
+import io
 import itertools
 import json
 import os
@@ -15,6 +16,12 @@ import subprocess
 import sys
 import threading
 import time
+
+# Force UTF-8 output on Windows
+if sys.stdout.encoding != "utf-8":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if sys.stderr.encoding != "utf-8":
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
