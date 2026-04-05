@@ -6,6 +6,7 @@ import { authCommand } from "./commands/auth.js";
 import { callCommand } from "./commands/call.js";
 import { replayCommand } from "./commands/replay.js";
 import { dbCommand } from "./commands/db.js";
+import { visualizeCommand } from "./commands/visualize.js";
 
 const program = new Command()
   .name("api-tracker")
@@ -18,6 +19,7 @@ program.addCommand(authCommand());
 program.addCommand(callCommand());
 program.addCommand(replayCommand());
 program.addCommand(dbCommand());
+program.addCommand(visualizeCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.log(JSON.stringify({ error: (err as Error).message, details: {} }));

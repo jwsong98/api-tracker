@@ -15,7 +15,9 @@
     {
       "phase": 1,
       "name": "visualize-cmd",
-      "status": "pending"
+      "status": "completed",
+      "started_at": "2026-04-05T19:46:50+0900",
+      "completed_at": "2026-04-05T19:48:30+0900"
     },
     {
       "phase": 2,
