@@ -1,0 +1,26 @@
+{
+  "project": "api-tracker",
+  "task": "visualize",
+  "prompt": "docs/에 있는 문서와 .test-recorder 예시, 그리고 src에 있는 것들을 읽고, 시나리오를 시각화해서 보여주는 스크립트를 구현하세요. 또한 어느 프로젝트에서든 이 cli를 쓸 수 있어야하고, 명령어로 node/edge로 연결관계에 대한 시각화 명령어도 추가해야 합니다.",
+  "totalPhases": 3,
+  "created_at": "2026-04-05T23:30:00+0900",
+  "phases": [
+    {
+      "phase": 0,
+      "name": "html-generator",
+      "status": "completed",
+      "started_at": "2026-04-05T19:43:34+0900",
+      "completed_at": "2026-04-05T19:46:30+0900"
+    },
+    {
+      "phase": 1,
+      "name": "visualize-cmd",
+      "status": "pending"
+    },
+    {
+      "phase": 2,
+      "name": "test-build",
+      "status": "pending"
+    }
+  ]
+}
