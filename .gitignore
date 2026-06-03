@@ -1,3 +1,5 @@
 node_modules/
 dist/
 .api-tracker/
+.DS_Store
+.test-recorder-*/
