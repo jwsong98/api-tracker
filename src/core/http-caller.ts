@@ -37,10 +37,11 @@ export async function callApi(options: {
 export async function callWithAuth(options: {
   method: string;
   url: string;
+  headers?: Record<string, string>;
   body?: any;
   authProfile?: string;
 }): Promise<{ status: number; headers: Record<string, string>; body: any }> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...(options.headers ?? {}) };
 
   if (options.authProfile) {
     const token = await getToken(options.authProfile);

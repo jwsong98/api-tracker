@@ -3,6 +3,10 @@
 ## Flow 1: 새 세션에서 API 테스트
 
 ```
+init
+  → .api-tracker/config.yaml, openapi.yaml, flow.yaml 예시 생성
+  → 기존 파일은 기본적으로 덮어쓰지 않음
+
 session start --name "user-crud" --reset-db
   → DB 시드 리셋 (gradle 명령 실행)
   → 세션 디렉토리 생성, meta.json 초기화
@@ -82,3 +86,71 @@ call GET /api/users/seed-user-id-001 --auth admin
   → 경고: UNREACHABLE_SUSPECT 플래깅
   → 호출은 정상 진행, 응답 기록
 ```
+
+## Flow 7: 상태 머신 기반 가드 실행
+
+```
+flow start --session "qa-flow"
+  → 일반 세션 생성
+  → flow.yaml의 initialState로 flow-state.json 초기화
+
+flow start --session "login-flow" --state login
+  → flow.yaml의 initialState 대신 login 상태에서 세션 시작
+  → 로그인부터 검증하는 흐름에 사용
+
+flow actions --session "qa-flow"
+  → 현재 상태에서 실행 가능한 action 목록 출력
+
+flow run load_projects --session "qa-flow"
+  → 현재 상태에 load_projects가 있는지 검증
+  → OpenAPI operationId(listProjects)로 method/path 조회
+  → API 호출
+  → 응답 status 검증
+  → observe(project) 후보 저장
+  → 상태 전이
+
+flow inputs open_project_detail --session "qa-flow"
+  → open_project_detail에 필요한 observed input 후보 출력
+  → manual 입력은 OpenAPI 스키마에서 타입/required/enum을 끌어와 함께 출력
+    (예: visibility → type:string, enum:["public","private"], required:false)
+    스키마에 매핑되지 않는 manual 키(예: 전체 body를 받는 patch)는 {name, required:true}로 표시
+
+flow run open_project_detail --session "qa-flow" --input project:p1
+  → p1이 이전 응답에서 관측된 project인지 검증
+  → 검증 성공 시 getProject 호출
+  → 검증 실패 시 호출하지 않고 에러 반환
+
+flow run create_project --session "qa-flow" --value name='"Demo"' --value visibility='"private"'
+  → create_project action의 manual 입력 name, visibility가 있는지 검증
+  → body 템플릿의 ${manual.name}, ${manual.visibility} 치환
+  → createProject 호출
+  → 응답에서 새 project를 observe 후보로 저장
+```
+
+`flow`는 raw API 호출을 노출하지 않는다. QA Agent는 action만 실행할 수 있고,
+현재 상태에 없는 action이나 관측되지 않은 ID를 사용한 action은 차단된다.
+생성/수정처럼 화면에서 사용자가 직접 입력하는 값은 `--value`로 전달한다.
+
+## 에이전트 출력 계약 (actions / inputs / run)
+
+세 명령은 에이전트가 그대로 파싱하도록 **공통 봉투**로 출력한다.
+
+- 공통 머리: `{ "ok": true, "state": { "id", "route", "variant" }, ... }`
+- `actions`: `actions[]` — 각 항목이 `{ id, to, protocol?, inputs: { observed[], manual[] } }`.
+  `inputs`까지 한 번에 담으므로 행동을 고르려고 `inputs`를 또 호출할 필요가 없다.
+  - `observed[]` = `{ input, observedAs, candidates[] }` (이전 응답에서 관측돼 고를 수 있는 값)
+  - `manual[]` = `{ name, type?, required, enum?, format?, ... }` (직접 입력해야 하는 값, OpenAPI 스키마 기반)
+- `inputs <action>`: 같은 스키마로 **한 action만** 자세히 (`action: { id, to, inputs }`).
+- `run <action>`: `{ ok, state, action, from, to, calls[], changed: { observed[], saved[] } }`.
+  전체 세션 상태 대신 이번 호출로 바뀐 키(`changed`)만 돌려준다.
+
+가드 실패는 텍스트가 아니라 JSON 에러로 내려온다 (exit code 1):
+
+```json
+{ "ok": false,
+  "error": { "code": "MISSING_REQUIRED_INPUT", "message": "...",
+             "input": "project", "producers": ["load_projects"] } }
+```
+
+에러 `code`: `ACTION_NOT_AVAILABLE`, `MISSING_REQUIRED_INPUT`, `INPUT_NOT_OBSERVED`,
+`MISSING_MANUAL_VALUE`, `UNKNOWN_OPERATION`, `UNEXPECTED_STATUS`, `UNKNOWN_STATE`.

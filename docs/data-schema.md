@@ -5,15 +5,155 @@
 ```
 .api-tracker/
   config.yaml
+  flow.yaml
   auth.json
   sessions/
     {session-name}/
       meta.json
+      flow-state.json
       edges/
         {NNN}.json
       graph.json
       bindings.json
 ```
+
+## flow.yaml
+
+라우트 기반 상태 머신 정의. `flow` 명령은 현재 상태의 action만 실행하고,
+`observe`로 관측한 값만 이후 action 입력으로 허용한다.
+
+```yaml
+version: 1
+initialState: project_list
+defaultAuth: user
+
+ws:                            # WebSocket 설정 (protocol: ws 사용 시 필수)
+  endpoint: /ws                # handshake endpoint (baseUrl + endpoint)
+  timeout: 5000                # 기본 수신 대기 타임아웃 (ms)
+
+states:
+  project_list:
+    route: /projects
+    actions:
+      load_projects:
+        to: project_list
+        calls:
+          - id: listProjects
+            operationId: listProjects
+            expect:
+              status: 200
+            observe:
+              project:
+                id: $.body.projects[*].id
+                label: $.body.projects[*].name
+
+      open_project_detail:
+        to: project_detail
+        requires:
+          project:
+            observedAs: project
+        calls:
+          - id: getProject
+            operationId: getProject
+            params:
+              projectId: ${project.id}
+            expect:
+              status: 200
+
+      create_project:
+        to: project_detail
+        manual:
+          - name
+          - visibility
+        calls:
+          - id: createProject
+            operationId: createProject
+            body:
+              name: ${manual.name}
+              visibility: ${manual.visibility}
+            expect:
+              status: 201
+            observe:
+              project:
+                id: $.body.id
+                label: $.body.name
+
+  project_detail:
+    route: /projects/:projectId
+
+  # WebSocket/STOMP 예시
+  chat_room:
+    route: /chat/:roomId
+    actions:
+      send_message:
+        to: chat_room
+        protocol: ws                          # ws | http (default: http)
+        subscribe: /topic/chat/${saved.roomId}  # STOMP SUBSCRIBE destination
+        manual: [text]
+        calls:
+          - id: sendChat
+            destination: /app/chat/${saved.roomId}  # STOMP SEND destination
+            clientId: true                    # UUID 자동 생성 → ${_clientId}
+            body:
+              text: ${manual.text}
+              clientGeneratedId: ${_clientId}
+            expect:
+              receive:                        # 수신 검증
+                timeout: 3000
+                match:                        # 조건 매칭 (optional)
+                  $.body.clientGeneratedId: ${_clientId}
+            observe:
+              message:
+                id: $.body.messageId
+```
+
+`manual`은 생성/수정처럼 사용자가 직접 넣어야 하는 값이다. CLI에서는
+`--value name='"Demo"' --value visibility='"private"'`처럼 전달하고,
+YAML에서는 `${manual.name}` 형태로 참조한다.
+
+### WebSocket action 필드
+
+| 필드 | 위치 | 설명 |
+|------|------|------|
+| `ws` | 루트 | WebSocket endpoint, 기본 타임아웃 |
+| `protocol: ws` | action | STOMP 프로토콜 사용 선언 |
+| `subscribe` | action | STOMP SUBSCRIBE destination |
+| `destination` | call | STOMP SEND destination (operationId 대신 사용) |
+| `clientId: true` | call | UUID 자동 생성, body에서 `${_clientId}`로 참조 |
+| `expect.receive` | call | 수신 검증: `timeout` (ms), `match` (JSONPath → 기대값) |
+
+## flow-state.json
+
+```json
+{
+  "currentState": "project_list",
+  "saved": {},
+  "observed": {
+    "project": [
+      {
+        "id": "p1",
+        "label": "Demo Project",
+        "source": {
+          "action": "load_projects",
+          "call": "listProjects"
+        }
+      }
+    ]
+  },
+  "history": [
+    {
+      "action": "load_projects",
+      "from": "project_list",
+      "to": "project_list",
+      "ok": true,
+      "timestamp": "2026-05-27T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+세션 시작 시 기본 초기 상태는 `flow.yaml`의 `initialState`를 사용한다. 특정 상태에서
+시작해야 하면 `flow start --session qa-flow --state login`처럼 override할 수 있다.
 
 ## config.yaml
 
@@ -112,7 +252,8 @@ db:
 - `request.template`: 템플릿 치환 전 원본. `$ref(node.N.response.path)` 포함 가능
 - `request.path/body`: 치환 후 실제 사용된 값
 - `refs[].source`: `"node.N.response.path"` (명시적) 또는 `"auto:node.N.response.path"` (자동 추론) 또는 `"response.new"` (이 응답에서 새로 생성된 값)
-- `warnings`: `"UNREACHABLE_SUSPECT: 'org-001' has no known source"` 등
+- `warnings`: `"UNREACHABLE_SUSPECT: 'org-001' has no known source"` 또는 `"WS_RECEIVE_TIMEOUT"` 등
+- `ws`: WebSocket action일 때만 존재. `protocol`, `destination`, `subscribe`, `clientGeneratedId`, `received[]`, `matchedMessage` 포함
 
 ## graph.json
 
