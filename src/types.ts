@@ -73,6 +73,21 @@ export interface Ref {
   boundAs: string | null;
 }
 
+export interface WsReceivedMessage {
+  destination: string;
+  body: unknown;
+  timestamp: string;
+}
+
+export interface WsEdgeExtension {
+  protocol: "ws";
+  destination: string;
+  subscribe?: string;
+  clientGeneratedId?: string;
+  received: WsReceivedMessage[];
+  matchedMessage?: WsReceivedMessage;
+}
+
 export interface Edge {
   edgeId: number;
   fromNode: number;
@@ -83,6 +98,7 @@ export interface Edge {
   refs: Ref[];
   warnings: string[];
   authProfile: string;
+  ws?: WsEdgeExtension;
 }
 
 // ── Graph (graph.json) ──

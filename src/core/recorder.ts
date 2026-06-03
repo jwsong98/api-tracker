@@ -1,4 +1,4 @@
-import type { Edge, Ref, SessionMeta, GraphData, Bindings } from "../types.js";
+import type { Edge, Ref, SessionMeta, GraphData, Bindings, WsEdgeExtension } from "../types.js";
 import { readJson, writeJson } from "../storage/file-store.js";
 import { extractBindings } from "./binding-engine.js";
 
@@ -13,6 +13,7 @@ export async function recordEdge(options: {
   refs: Ref[];
   response: { status: number; headers: Record<string, string>; body: any };
   warnings: string[];
+  ws?: WsEdgeExtension;
 }): Promise<{ edgeId: number; fromNode: number; toNode: number; newBindings: Bindings }> {
   const { session } = options;
   const prefix = `sessions/${session}`;
@@ -46,6 +47,7 @@ export async function recordEdge(options: {
     refs: options.refs,
     warnings: options.warnings,
     authProfile: options.authProfile ?? "",
+    ...(options.ws ? { ws: options.ws } : {}),
   };
 
   // 4. Save edge file (3-digit zero-padded)
