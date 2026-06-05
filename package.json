@@ -8,7 +8,9 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "dev": "tsc --watch"
+    "dev": "tsc --watch",
+    "start": "node ./dist/cli/index.js",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "commander": "^13.1.0",
