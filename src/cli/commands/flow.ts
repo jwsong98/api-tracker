@@ -8,6 +8,7 @@ import {
   buildActionView,
   describeAvailableActions,
   runFlowAction,
+  runScreenLoad,
   stateRef,
 } from "../../flow/flow-runtime.js";
 import { loadOpenApiOperations } from "../../flow/openapi-index.js";
@@ -78,13 +79,20 @@ Concepts:
     .option("--continue-from <session>", "Continue from existing session")
     .option("--human", "Human-readable output")
     .action(async (opts) => {
+      const config = await loadConfig();
       const flowConfig = await loadFlowConfig();
       const meta = await createSession({
         name: opts.session,
         continueFrom: opts.continueFrom,
       });
-      const state = await createFlowSessionState(meta.name, flowConfig, opts.state);
-      console.log(formatOutput({ session: meta.name, flow: state }, { human: opts.human }));
+      await createFlowSessionState(meta.name, flowConfig, opts.state);
+      // Auto-load the initial screen's data (no-op if it declares no `load`).
+      const { loaded, state } = await runScreenLoad({
+        config,
+        flow: flowConfig,
+        session: meta.name,
+      });
+      console.log(formatOutput({ session: meta.name, flow: state, loaded }, { human: opts.human }));
     });
 
   flow
@@ -183,9 +191,14 @@ YAML body templates can reference manual values with \${manual.name} or \${manua
           from: result.from,
           to: result.to,
           calls: result.calls,
+          loaded: result.loaded,
           changed: {
-            observed: [...new Set(result.calls.flatMap((c) => c.observed))],
-            saved: [...new Set(result.calls.flatMap((c) => c.saved))],
+            observed: [
+              ...new Set([...result.calls, ...result.loaded].flatMap((c) => c.observed)),
+            ],
+            saved: [
+              ...new Set([...result.calls, ...result.loaded].flatMap((c) => c.saved)),
+            ],
           },
         };
       });

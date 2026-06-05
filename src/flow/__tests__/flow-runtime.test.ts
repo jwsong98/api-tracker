@@ -57,6 +57,7 @@ const flow: FlowConfig = {
                 projectId: "${project.id}",
               },
               expect: { status: 200 },
+              save: { currentProjectId: "$.body.id" },
             },
           ],
         },
@@ -72,6 +73,7 @@ const flow: FlowConfig = {
                 visibility: "${manual.visibility}",
               },
               expect: { status: 201 },
+              save: { currentProjectId: "$.body.id" },
               observe: {
                 project: {
                   id: "$.body.id",
@@ -85,6 +87,17 @@ const flow: FlowConfig = {
     },
     project_detail: {
       route: "/projects/:projectId",
+      load: [
+        {
+          id: "listMembers",
+          operationId: "listMembers",
+          params: { projectId: "${currentProjectId}" },
+          expect: { status: 200 },
+          observe: {
+            member: { id: "$.body.members[*].id", label: "$.body.members[*].name" },
+          },
+        },
+      ],
       actions: {},
     },
   },
@@ -107,6 +120,9 @@ beforeEach(async () => {
         },
         "/projects/{projectId}": {
           get: { operationId: "getProject" },
+        },
+        "/projects/{projectId}/members": {
+          get: { operationId: "listMembers" },
         },
       },
     }),
@@ -153,6 +169,7 @@ describe("runFlowAction", () => {
     expect(view.inputs.observed[0].candidates[0]).toMatchObject({ id: "p1", label: "Demo" });
 
     nock(BASE_URL).get("/projects/p1").reply(200, { id: "p1", name: "Demo" });
+    nock(BASE_URL).get("/projects/p1/members").reply(200, { members: [] });
 
     const detailResult = await runFlowAction({
       config,
@@ -165,6 +182,41 @@ describe("runFlowAction", () => {
     expect(detailResult.from).toBe("project_list");
     expect(detailResult.to).toBe("project_detail");
     expect(detailResult.calls[0].path).toBe("/projects/p1");
+  });
+
+  it("auto-loads the destination screen, pooling data from another API", async () => {
+    nock(BASE_URL)
+      .get("/projects")
+      .reply(200, { projects: [{ id: "p1", name: "Demo" }] });
+
+    await runFlowAction({ config, flow, session: "flow-test", actionId: "load_projects" });
+
+    nock(BASE_URL).get("/projects/p1").reply(200, { id: "p1", name: "Demo" });
+    nock(BASE_URL)
+      .get("/projects/p1/members")
+      .reply(200, { members: [{ id: "m1", name: "Alice" }, { id: "m2", name: "Bob" }] });
+
+    const detailResult = await runFlowAction({
+      config,
+      flow,
+      session: "flow-test",
+      actionId: "open_project_detail",
+      inputs: { project: "p1" },
+    });
+
+    // The transition call and the screen's load call are reported separately.
+    expect(detailResult.calls[0].path).toBe("/projects/p1");
+    expect(detailResult.loaded[0]).toMatchObject({
+      operationId: "listMembers",
+      path: "/projects/p1/members",
+      observed: ["member"],
+    });
+
+    // Members loaded by the screen land in the shared observed pool.
+    const state = await readJson<FlowSessionState>("sessions/flow-test/flow-state.json");
+    expect(state!.currentState).toBe("project_detail");
+    expect(state!.observed.member.map((m) => m.id)).toEqual(["m1", "m2"]);
+    expect(state!.saved.currentProjectId).toBe("p1");
   });
 
   it("blocks unobserved IDs", async () => {
@@ -194,6 +246,7 @@ describe("runFlowAction", () => {
     nock(BASE_URL)
       .post("/projects", { name: "Demo", visibility: "private" })
       .reply(201, { id: "p-created", name: "Demo" });
+    nock(BASE_URL).get("/projects/p-created/members").reply(200, { members: [] });
 
     const result = await runFlowAction({
       config,

@@ -131,6 +131,51 @@ flow run create_project --session "qa-flow" --value name='"Demo"' --value visibi
 현재 상태에 없는 action이나 관측되지 않은 ID를 사용한 action은 차단된다.
 생성/수정처럼 화면에서 사용자가 직접 입력하는 값은 `--value`로 전달한다.
 
+## Flow 8: 화면(state.load) 진입 시 복합 데이터 로딩
+
+실제 프론트 화면은 진입 시 여러 API를 동시에 떠서 데이터를 모은다. state에
+`load:` 블록을 두면 그 화면으로 **전이가 완료된 직후**(또는 `flow start`로 그
+화면에서 세션을 시작할 때) 자동 실행되어, 여러 API에서 가져온 값을 하나의
+observed/saved 풀에 모은다. 이후 action은 풀에 모인 값들을 조합해 또 다른 API를
+호출할 수 있다.
+
+```yaml
+states:
+  project_detail:
+    route: /projects/:projectId
+    load:                       # 화면 진입 시 자동 실행, 한 풀에 데이터 적재
+      - operationId: listMembers
+        params: { projectId: "${saved.currentProjectId}" }
+        observe:
+          member: { id: $.body.members[*].id, label: $.body.members[*].name }
+      - operationId: listTasks
+        params: { projectId: "${saved.currentProjectId}" }
+        observe:
+          task: { id: $.body.tasks[*].id, label: $.body.tasks[*].title }
+    actions:
+      assign_member:            # 풀에서 골라 합성 호출
+        to: project_detail
+        requires:
+          member: { observedAs: member }
+          task:   { observedAs: task }
+        calls:
+          - operationId: assignTask
+            body:
+              projectId: "${saved.currentProjectId}"
+              memberId:  "${member.value}"
+              taskId:    "${task.value}"
+```
+
+- `load` 호출은 **전역 풀(saved/observed)에만 접근**한다. action 입력(`--input`)이나
+  `--value`는 보이지 않으므로, 화면으로 진입시키는 action이 load에 필요한 값을
+  미리 `save` 해두어야 한다 (위 예에서 `open_project_detail`이 `currentProjectId`를
+  save). load 호출들은 순차 실행되며 앞 호출의 save 값이 다음 호출 context에 반영된다.
+- 전이 도중 load 호출이 `expect` status 검증에 실패하면 `UNEXPECTED_STATUS`로
+  중단되고 전이는 커밋되지 않는다.
+
+출력에서 전이 본체 호출은 `calls[]`, 도착 화면의 자동 로딩 호출은 `loaded[]`로
+분리되어 내려온다. `flow start` 출력에도 초기 화면 load 결과가 `loaded[]`로 포함된다.
+
 ## 에이전트 출력 계약 (actions / inputs / run)
 
 세 명령은 에이전트가 그대로 파싱하도록 **공통 봉투**로 출력한다.
@@ -141,8 +186,10 @@ flow run create_project --session "qa-flow" --value name='"Demo"' --value visibi
   - `observed[]` = `{ input, observedAs, candidates[] }` (이전 응답에서 관측돼 고를 수 있는 값)
   - `manual[]` = `{ name, type?, required, enum?, format?, ... }` (직접 입력해야 하는 값, OpenAPI 스키마 기반)
 - `inputs <action>`: 같은 스키마로 **한 action만** 자세히 (`action: { id, to, inputs }`).
-- `run <action>`: `{ ok, state, action, from, to, calls[], changed: { observed[], saved[] } }`.
-  전체 세션 상태 대신 이번 호출로 바뀐 키(`changed`)만 돌려준다.
+- `run <action>`: `{ ok, state, action, from, to, calls[], loaded[], changed: { observed[], saved[] } }`.
+  전체 세션 상태 대신 이번 호출로 바뀐 키(`changed`)만 돌려준다. `calls[]`는 전이
+  본체 호출, `loaded[]`는 도착 화면이 자동 실행한 load 호출이며, `changed`는 둘을
+  합산해 계산한다.
 
 가드 실패는 텍스트가 아니라 JSON 에러로 내려온다 (exit code 1):
 

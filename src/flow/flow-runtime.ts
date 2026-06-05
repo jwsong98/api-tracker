@@ -13,6 +13,7 @@ import type {
   ActionView,
   FlowActionConfig,
   FlowCallConfig,
+  FlowCallResult,
   FlowConfig,
   FlowSessionState,
   FlowStateRef,
@@ -144,22 +145,8 @@ export async function runFlowAction(options: {
   action: string;
   from: string;
   to: string;
-  calls: Array<{
-    operationId?: string;
-    destination?: string;
-    method: string;
-    path: string;
-    status: number;
-    saved: string[];
-    observed: string[];
-    clientGeneratedId?: string;
-    received?: {
-      count: number;
-      matched: boolean;
-      matchedMessage?: unknown;
-      timeElapsed: number;
-    };
-  }>;
+  calls: FlowCallResult[];
+  loaded: FlowCallResult[];
   state: FlowSessionState;
 }> {
   const { config, flow, session, actionId } = options;
@@ -170,22 +157,7 @@ export async function runFlowAction(options: {
   const manualContext = resolveManualValues(action, options.values ?? {});
   const operations = await loadOpenApiOperations(config.openapi.specPath);
 
-  const calls: Array<{
-    operationId?: string;
-    destination?: string;
-    method: string;
-    path: string;
-    status: number;
-    saved: string[];
-    observed: string[];
-    clientGeneratedId?: string;
-    received?: {
-      count: number;
-      matched: boolean;
-      matchedMessage?: unknown;
-      timeElapsed: number;
-    };
-  }> = [];
+  const calls: FlowCallResult[] = [];
   const workingState: FlowSessionState = cloneState(state);
   const context: Record<string, unknown> = {
     ...workingState.saved,
@@ -217,26 +189,22 @@ export async function runFlowAction(options: {
       });
     }
   } else {
-    for (const call of action.calls ?? []) {
-      const operation = operations.get(call.operationId!);
-      if (!operation) {
-        throw new FlowError("UNKNOWN_OPERATION", `Unknown OpenAPI operationId "${call.operationId}"`, {
-          operationId: call.operationId,
-          action: actionId,
-        });
-      }
-
-      const rendered = renderCall(operation, call, context);
-      const response = await callWithAuth({
-        method: operation.method,
-        url: `${config.server.baseUrl}${rendered.path}`,
-        headers: rendered.headers,
-        body: rendered.body,
-        authProfile: call.auth ?? flow.defaultAuth,
+    try {
+      const httpResults = await executeHttpCalls({
+        config,
+        flow,
+        session,
+        operations,
+        sourceLabel: actionId,
+        calls: action.calls ?? [],
+        context,
+        workingState,
       });
-
-      const expectedStatus = call.expect?.status;
-      if (expectedStatus != null && response.status !== expectedStatus) {
+      calls.push(...httpResults);
+    } catch (err) {
+      // A guard failure mid-transition is recorded so history reflects the
+      // attempt; the transition itself is not committed.
+      if (err instanceof FlowError && err.code === "UNEXPECTED_STATUS") {
         await appendHistory(session, workingState, {
           action: actionId,
           from,
@@ -244,46 +212,23 @@ export async function runFlowAction(options: {
           ok: false,
           timestamp: new Date().toISOString(),
         });
-        throw new FlowError(
-          "UNEXPECTED_STATUS",
-          `Action "${actionId}" failed: ${call.operationId} expected status ${expectedStatus}, got ${response.status}`,
-          {
-            action: actionId,
-            operationId: call.operationId,
-            expected: expectedStatus,
-            received: response.status,
-          },
-        );
       }
-
-      const observedKeys = applyObserve(workingState, actionId, call, response.body);
-      const savedKeys = applySave(workingState, call, response.body, context);
-
-      await recordEdge({
-        session,
-        method: operation.method,
-        path: rendered.path,
-        body: rendered.body,
-        authProfile: call.auth ?? flow.defaultAuth,
-        templatePath: operation.path,
-        templateBody: call.body,
-        refs: rendered.refs,
-        response,
-        warnings: [],
-      });
-
-      calls.push({
-        operationId: call.operationId,
-        method: operation.method,
-        path: rendered.path,
-        status: response.status,
-        saved: savedKeys,
-        observed: observedKeys,
-      });
+      throw err;
     }
   }
 
+  // Transition completes, then the destination screen auto-loads its data into
+  // the shared observed/saved pool (see FlowStateConfig.load).
   workingState.currentState = action.to;
+  const loaded = await executeScreenLoad({
+    config,
+    flow,
+    session,
+    operations,
+    stateId: action.to,
+    workingState,
+  });
+
   workingState.history.push({
     action: actionId,
     from,
@@ -298,8 +243,148 @@ export async function runFlowAction(options: {
     from,
     to: action.to,
     calls,
+    loaded,
     state: workingState,
   };
+}
+
+/**
+ * Run a screen's `load` calls and persist the resulting state. Used when a
+ * session starts directly on a screen (flow start), where there is no
+ * transitioning action to trigger the load. Returns the executed load calls and
+ * the updated state; a no-op (empty `loaded`) when the screen defines no load.
+ */
+export async function runScreenLoad(options: {
+  config: Config;
+  flow: FlowConfig;
+  session: string;
+}): Promise<{ loaded: FlowCallResult[]; state: FlowSessionState }> {
+  const { config, flow, session } = options;
+  const state = await getFlowSessionState(session);
+  const screen = flow.states[state.currentState];
+  if (!screen?.load?.length) {
+    return { loaded: [], state };
+  }
+  const operations = await loadOpenApiOperations(config.openapi.specPath);
+  const workingState = cloneState(state);
+  const loaded = await executeScreenLoad({
+    config,
+    flow,
+    session,
+    operations,
+    stateId: state.currentState,
+    workingState,
+  });
+  await writeFlowSessionState(session, workingState);
+  return { loaded, state: workingState };
+}
+
+/** Execute the `load` calls declared on a screen, mutating workingState. */
+async function executeScreenLoad(options: {
+  config: Config;
+  flow: FlowConfig;
+  session: string;
+  operations: Map<string, OpenApiOperation>;
+  stateId: string;
+  workingState: FlowSessionState;
+}): Promise<FlowCallResult[]> {
+  const { config, flow, session, operations, stateId, workingState } = options;
+  const loadCalls = flow.states[stateId]?.load ?? [];
+  if (loadCalls.length === 0) return [];
+  // Load reads from the global pool only — saved values plus env. It has no
+  // action inputs or manual values of its own.
+  const context: Record<string, unknown> = { ...workingState.saved, env: process.env };
+  return executeHttpCalls({
+    config,
+    flow,
+    session,
+    operations,
+    sourceLabel: `${stateId}:load`,
+    calls: loadCalls,
+    context,
+    workingState,
+  });
+}
+
+/**
+ * Execute a list of HTTP calls in sequence against a working state: render each
+ * with the shared context, enforce its expected status, apply observe/save, and
+ * record an edge. Shared by action calls and screen load calls. Throws a
+ * FlowError on an unknown operationId or an unexpected status; the caller
+ * decides how to reflect that in session history.
+ */
+async function executeHttpCalls(options: {
+  config: Config;
+  flow: FlowConfig;
+  session: string;
+  operations: Map<string, OpenApiOperation>;
+  sourceLabel: string;
+  calls: FlowCallConfig[];
+  context: Record<string, unknown>;
+  workingState: FlowSessionState;
+}): Promise<FlowCallResult[]> {
+  const { config, flow, session, operations, sourceLabel, calls, context, workingState } = options;
+  const results: FlowCallResult[] = [];
+
+  for (const call of calls) {
+    const operation = operations.get(call.operationId!);
+    if (!operation) {
+      throw new FlowError("UNKNOWN_OPERATION", `Unknown OpenAPI operationId "${call.operationId}"`, {
+        operationId: call.operationId,
+        action: sourceLabel,
+      });
+    }
+
+    const rendered = renderCall(operation, call, context);
+    const response = await callWithAuth({
+      method: operation.method,
+      url: `${config.server.baseUrl}${rendered.path}`,
+      headers: rendered.headers,
+      body: rendered.body,
+      authProfile: call.auth ?? flow.defaultAuth,
+    });
+
+    const expectedStatus = call.expect?.status;
+    if (expectedStatus != null && response.status !== expectedStatus) {
+      throw new FlowError(
+        "UNEXPECTED_STATUS",
+        `"${sourceLabel}" failed: ${call.operationId} expected status ${expectedStatus}, got ${response.status}`,
+        {
+          action: sourceLabel,
+          operationId: call.operationId,
+          expected: expectedStatus,
+          received: response.status,
+        },
+      );
+    }
+
+    const observedKeys = applyObserve(workingState, sourceLabel, call, response.body);
+    const savedKeys = applySave(workingState, call, response.body, context);
+
+    await recordEdge({
+      session,
+      method: operation.method,
+      path: rendered.path,
+      body: rendered.body,
+      authProfile: call.auth ?? flow.defaultAuth,
+      templatePath: operation.path,
+      templateBody: call.body,
+      refs: rendered.refs,
+      response,
+      warnings: [],
+    });
+
+    results.push({
+      operationId: call.operationId,
+      method: operation.method,
+      path: rendered.path,
+      status: response.status,
+      saved: savedKeys,
+      observed: observedKeys,
+    });
+  }
+
+  return results;
 }
 
 function resolveManualValues(

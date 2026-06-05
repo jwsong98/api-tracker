@@ -14,6 +14,14 @@ export async function validateFlowConfig(flow: FlowConfig, config: Config): Prom
   const operations = await loadOpenApiOperations(config.openapi.specPath);
 
   for (const [stateId, state] of Object.entries(flow.states)) {
+    for (const call of state.load ?? []) {
+      if (!call.operationId) {
+        throw new Error(`State "${stateId}" load call is missing operationId`);
+      }
+      if (!operations.has(call.operationId)) {
+        throw new Error(`State "${stateId}" load references unknown operationId "${call.operationId}"`);
+      }
+    }
     for (const [actionId, action] of Object.entries(state.actions ?? {})) {
       if (!flow.states[action.to]) {
         throw new Error(`Action "${stateId}.${actionId}" points to unknown state "${action.to}"`);

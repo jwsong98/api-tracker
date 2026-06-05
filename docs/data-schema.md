@@ -59,6 +59,8 @@ states:
               projectId: ${project.id}
             expect:
               status: 200
+            save:                          # 도착 화면 load가 쓸 값을 풀에 저장
+              currentProjectId: $.body.id
 
       create_project:
         to: project_detail
@@ -80,6 +82,17 @@ states:
 
   project_detail:
     route: /projects/:projectId
+    load:                          # 화면 진입 시 자동 실행, 복합 데이터를 풀에 적재
+      - id: listMembers
+        operationId: listMembers
+        params:
+          projectId: ${saved.currentProjectId}
+        expect:
+          status: 200
+        observe:
+          member:
+            id: $.body.members[*].id
+            label: $.body.members[*].name
 
   # WebSocket/STOMP 예시
   chat_room:
@@ -110,6 +123,12 @@ states:
 `manual`은 생성/수정처럼 사용자가 직접 넣어야 하는 값이다. CLI에서는
 `--value name='"Demo"' --value visibility='"private"'`처럼 전달하고,
 YAML에서는 `${manual.name}` 형태로 참조한다.
+
+`load`는 화면(state) 진입 시 자동 실행되는 호출 묶음이다. 그 화면으로 전이가
+완료된 직후(또는 `flow start`로 해당 화면에서 시작할 때) 실행되어 여러 API의
+응답을 하나의 observed/saved 풀에 모은다. load 호출은 전역 풀(`${saved.*}`)과
+`${env.*}`만 참조할 수 있고 action 입력은 보지 못하므로, 진입시키는 action이
+필요한 값을 미리 `save` 해두어야 한다. 자세한 동작은 `docs/flow.md`의 Flow 8 참고.
 
 ### WebSocket action 필드
 

@@ -14,6 +14,16 @@ export interface FlowConfig {
 export interface FlowStateConfig {
   route: string;
   variant?: string;
+  /**
+   * Calls that fire automatically when this screen is entered (on transition in,
+   * or on flow start when it is the initial state). They pool data from several
+   * APIs into the session's observed/saved store so that later actions can
+   * compose values gathered across the screen into a single follow-up call.
+   * Load calls read from the global context (saved values + env); they cannot
+   * read action-scoped inputs, so a navigating action must `save` anything its
+   * destination's load needs.
+   */
+  load?: FlowCallConfig[];
   actions?: Record<string, FlowActionConfig>;
 }
 
@@ -97,6 +107,24 @@ export interface ObservedValue {
   source: {
     action: string;
     call: string;
+  };
+}
+
+/** Result summary for a single executed call (an action call or a screen load call). */
+export interface FlowCallResult {
+  operationId?: string;
+  destination?: string;
+  method: string;
+  path: string;
+  status: number;
+  saved: string[];
+  observed: string[];
+  clientGeneratedId?: string;
+  received?: {
+    count: number;
+    matched: boolean;
+    matchedMessage?: unknown;
+    timeElapsed: number;
   };
 }
 
