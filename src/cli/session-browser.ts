@@ -99,7 +99,7 @@ function renderSessionList(sessions: SessionMeta[], cursor: number): void {
   console.log(hr("═"));
 }
 
-function renderEdge(edge: Edge, index: number, total: number, sessionName: string): void {
+export function renderEdge(edge: Edge, index: number, total: number, sessionName: string): void {
   const width = termWidth();
   const { request: req, response: res } = edge;
   const ts = new Date(edge.timestamp).toLocaleString();

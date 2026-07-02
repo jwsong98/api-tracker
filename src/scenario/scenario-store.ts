@@ -1,5 +1,6 @@
 import { readJson, writeJson, listFiles, readYaml } from "../storage/file-store.js";
 import { listSessions } from "../core/session-manager.js";
+import type { Edge } from "../types.js";
 import type { ScenarioConfig, ScenarioResult } from "./types.js";
 
 /**
@@ -41,4 +42,55 @@ export async function findLatestScenarioResult(): Promise<ScenarioResult | null>
     if (!latest || result.finishedAt > latest.finishedAt) latest = result;
   }
   return latest;
+}
+
+/** A scenario file joined with its most recent run result (null = never run). */
+export interface ScenarioOverview {
+  path: string;
+  config: ScenarioConfig | null;
+  result: ScenarioResult | null;
+}
+
+/**
+ * List every scenario file joined with its latest run result. Used by
+ * `scenario browse` to render the ticket board. A scenario whose YAML fails to
+ * parse is still listed (config null) so it stays visible.
+ */
+export async function listScenarioOverviews(): Promise<ScenarioOverview[]> {
+  const paths = await listScenarioPaths();
+
+  // Index the latest result per scenarioPath across all sessions.
+  const sessions = await listSessions();
+  const latestByPath = new Map<string, ScenarioResult>();
+  for (const s of sessions) {
+    const result = await readScenarioResult(s.name);
+    if (!result) continue;
+    const current = latestByPath.get(result.scenarioPath);
+    if (!current || result.finishedAt > current.finishedAt) {
+      latestByPath.set(result.scenarioPath, result);
+    }
+  }
+
+  const overviews: ScenarioOverview[] = [];
+  for (const path of paths) {
+    let config: ScenarioConfig | null = null;
+    try {
+      config = await loadScenario(path);
+    } catch {
+      config = null;
+    }
+    overviews.push({ path, config, result: latestByPath.get(path) ?? null });
+  }
+  return overviews;
+}
+
+/** Load a session's recorded edges (for the scenario browser's edge drill-in). */
+export async function loadSessionEdges(session: string): Promise<Edge[]> {
+  const files = await listFiles(`sessions/${session}/edges`);
+  const edges: Edge[] = [];
+  for (const file of files) {
+    const edge = await readJson<Edge>(`sessions/${session}/edges/${file}`);
+    if (edge) edges.push(edge);
+  }
+  return edges.sort((a, b) => a.edgeId - b.edgeId);
 }

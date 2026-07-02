@@ -5,51 +5,14 @@ import { validateScenario, ScenarioError } from "../../scenario/scenario-loader.
 import { runScenario } from "../../scenario/scenario-runner.js";
 import {
   findLatestScenarioResult,
+  listScenarioOverviews,
   loadScenario,
+  loadSessionEdges,
   readScenarioResult,
   resolveScenarioPath,
 } from "../../scenario/scenario-store.js";
-import type { ScenarioConfig, ScenarioResult, StepStatus } from "../../scenario/types.js";
-
-const C = { reset: "\x1b[0m", bold: "\x1b[1m", dim: "\x1b[2m", green: "\x1b[32m", red: "\x1b[31m", yellow: "\x1b[33m" };
-
-const MARK: Record<StepStatus, string> = {
-  passed: `${C.green}✔${C.reset}`,
-  failed: `${C.red}✘${C.reset}`,
-  pending: `${C.dim}◌${C.reset}`,
-};
-
-/** A human checklist of a run — the "cognitive-debt" view (design §3.5). */
-function renderChecklist(r: ScenarioResult): string {
-  const badge = r.overall === "green" ? `${C.green}● GREEN${C.reset}` : `${C.red}● RED${C.reset}`;
-  const lines: string[] = [];
-  lines.push(`${C.bold}${r.ticket}${C.reset}${r.title ? `  ${r.title}` : ""}    attempt ${r.attempt}   ${badge}`);
-  lines.push("─".repeat(60));
-
-  if (r.baseline.length) {
-    lines.push(`${C.dim}BASELINE${C.reset}`);
-    for (const b of r.baseline) {
-      lines.push(` ${MARK[b.status]} ${b.operationId}${b.saved.length ? `  ${C.dim}→ ${b.saved.join(", ")}${C.reset}` : ""}`);
-      if (b.error) lines.push(`     ${C.red}${b.error.message}${C.reset}`);
-    }
-  }
-
-  lines.push(`${C.dim}STEPS${C.reset}`);
-  for (const s of r.steps) {
-    const route = s.from && s.to ? `  ${C.dim}${s.from} → ${s.to}${C.reset}` : "";
-    lines.push(` ${MARK[s.status]} ${s.id + 1}. ${s.action}${route}`);
-    if (s.error) lines.push(`     ${C.red}${s.error.message}${C.reset}`);
-  }
-
-  if (r.goal.length) {
-    lines.push(`${C.dim}GOAL${C.reset}`);
-    for (const g of r.goal) {
-      lines.push(` ${MARK[g.status]} ${g.name}`);
-      if (g.error) lines.push(`     ${C.red}${g.error.message}${C.reset}`);
-    }
-  }
-  return lines.join("\n");
-}
+import { browseScenarios, renderChecklist } from "../scenario-browser.js";
+import type { ScenarioConfig, ScenarioResult } from "../../scenario/types.js";
 
 function sanitizeSession(ticket: string): string {
   const name = ticket.replace(/[^a-zA-Z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -158,6 +121,14 @@ matchers ({ isUuid: true }, { after: "\${run.startedAt}" }), or a baseline +
       }
       console.log(human ? renderChecklist(result) : formatOutput(result));
       if (result.overall === "red") process.exitCode = 1;
+    });
+
+  scenario
+    .command("browse")
+    .description("Interactive scenario board → checklist → recorded edges")
+    .action(async () => {
+      const overviews = await listScenarioOverviews();
+      await browseScenarios(overviews, loadSessionEdges);
     });
 
   return scenario;
