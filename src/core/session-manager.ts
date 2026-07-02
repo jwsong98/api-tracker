@@ -1,5 +1,5 @@
 import type { SessionMeta, GraphData, Bindings } from "../types.js";
-import { readJson, writeJson, listDirs, exists } from "../storage/file-store.js";
+import { readJson, writeJson, listDirs, exists, removeDir } from "../storage/file-store.js";
 
 const SESSION_NAME_RE = /^[a-zA-Z0-9-]+$/;
 
@@ -57,6 +57,17 @@ export async function createSession(options: {
   await writeJson(`sessions/${name}/bindings.json`, bindings);
 
   return meta;
+}
+
+/**
+ * Wipe a session's directory and recreate it clean. Used by `scenario run` so
+ * each attempt starts from a fresh flow-state/graph while keeping a stable
+ * session identity (attempt count is carried in scenario-result.json).
+ */
+export async function resetSession(name: string): Promise<SessionMeta> {
+  validateName(name);
+  await removeDir(`sessions/${name}`);
+  return createSession({ name });
 }
 
 export async function listSessions(): Promise<SessionMeta[]> {

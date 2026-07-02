@@ -29,6 +29,10 @@ export async function writeJson(relativePath: string, data: unknown): Promise<vo
   await fs.writeFile(filePath, JSON.stringify(data, null, 2) + "\n", "utf-8");
 }
 
+export async function removeDir(relativePath: string): Promise<void> {
+  await fs.rm(resolve(relativePath), { recursive: true, force: true });
+}
+
 export async function readYaml<T>(relativePath: string): Promise<T> {
   const filePath = resolve(relativePath);
   try {
@@ -61,5 +65,21 @@ export async function listDirs(relativePath: string): Promise<string[]> {
       return [];
     }
     throw new Error(`Failed to list directories at ${dirPath}: ${(err as Error).message}`);
+  }
+}
+
+export async function listFiles(relativePath: string): Promise<string[]> {
+  const dirPath = resolve(relativePath);
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    return entries
+      .filter((e) => e.isFile())
+      .map((e) => e.name)
+      .sort();
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return [];
+    }
+    throw new Error(`Failed to list files at ${dirPath}: ${(err as Error).message}`);
   }
 }

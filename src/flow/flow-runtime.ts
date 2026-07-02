@@ -460,7 +460,7 @@ function resolveRequiredInputs(
   return result;
 }
 
-function renderCall(
+export function renderCall(
   operation: OpenApiOperation,
   call: FlowCallConfig,
   context: Record<string, unknown>,

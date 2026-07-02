@@ -7,6 +7,7 @@ import { callCommand } from "./commands/call.js";
 import { replayCommand } from "./commands/replay.js";
 import { dbCommand } from "./commands/db.js";
 import { flowCommand } from "./commands/flow.js";
+import { scenarioCommand } from "./commands/scenario.js";
 import { initCommand } from "./commands/init.js";
 
 const program = new Command()
@@ -22,6 +23,7 @@ program.addCommand(callCommand());
 program.addCommand(replayCommand());
 program.addCommand(dbCommand());
 program.addCommand(flowCommand());
+program.addCommand(scenarioCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   console.log(JSON.stringify({ error: (err as Error).message, details: {} }));
