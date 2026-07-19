@@ -81,13 +81,15 @@ function render(flow: FlowConfig, state: InteractiveState): void {
   lines.push("\x1B[90m── States ──\x1B[0m");
   for (const [id, s] of Object.entries(flow.states)) {
     const marker = id === currentState ? "\x1B[36m● " : "\x1B[90m○ ";
+    const title = s.title ? ` \x1B[0m${s.title}` : "";
     const route = s.route ? ` \x1B[90m${s.route}\x1B[0m` : "";
-    lines.push(`  ${marker}${id}\x1B[0m${route}`);
+    lines.push(`  ${marker}${id}\x1B[0m${title}${route}`);
   }
   lines.push("");
 
   // current state detail
-  lines.push(`\x1B[1mCurrent:\x1B[0m \x1B[36m${currentState}\x1B[0m \x1B[90m${stateConfig?.route ?? ""}\x1B[0m`);
+  const currentTitle = stateConfig?.title ? ` ${stateConfig.title}` : "";
+  lines.push(`\x1B[1mCurrent:\x1B[0m \x1B[36m${currentState}\x1B[0m${currentTitle} \x1B[90m${stateConfig?.route ?? ""}\x1B[0m`);
   lines.push("");
 
   // actions
@@ -115,7 +117,8 @@ function render(flow: FlowConfig, state: InteractiveState): void {
         .filter(Boolean);
       const callStr = calls.length > 0 ? `  \x1B[90m[${calls.join(", ")}]\x1B[0m` : "";
 
-      lines.push(`${arrow}${bg}${a.id}\x1B[0m ${transition}${protocol}${callStr}${inputStr}`);
+      const title = a.config.title ? ` \x1B[90m${a.config.title}\x1B[0m` : "";
+      lines.push(`${arrow}${bg}${a.id}\x1B[0m${title} ${transition}${protocol}${callStr}${inputStr}`);
     }
   }
   lines.push("");

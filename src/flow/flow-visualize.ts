@@ -6,7 +6,8 @@ export function generateMermaid(flow: FlowConfig, currentState?: string): string
   lines.push(`  [*] --> ${flow.initialState}`);
 
   for (const [stateId, state] of Object.entries(flow.states)) {
-    const label = state.route ? `${stateId} : ${stateId}\\n${state.route}` : stateId;
+    const name = state.title ?? stateId;
+    const label = state.route ? `${stateId} : ${name}\\n${state.route}` : `${stateId} : ${name}`;
     lines.push(`  ${label}`);
   }
 
@@ -18,7 +19,8 @@ export function generateMermaid(flow: FlowConfig, currentState?: string): string
   for (const [stateId, state] of Object.entries(flow.states)) {
     for (const [actionId, action] of Object.entries(state.actions ?? {})) {
       const protocol = action.protocol === "ws" ? " [ws]" : "";
-      lines.push(`  ${stateId} --> ${action.to} : ${actionId}${protocol}`);
+      const name = action.title ?? actionId;
+      lines.push(`  ${stateId} --> ${action.to} : ${name}${protocol}`);
     }
   }
 

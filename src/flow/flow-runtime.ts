@@ -30,7 +30,7 @@ export function stateRef(flow: FlowConfig, stateId: string): FlowStateRef {
   if (!state) {
     throw new FlowError("UNKNOWN_STATE", `Flow state "${stateId}" is not defined`, { state: stateId });
   }
-  return { id: stateId, route: state.route, variant: state.variant };
+  return { id: stateId, title: state.title, route: state.route, variant: state.variant };
 }
 
 /**
@@ -55,7 +55,9 @@ export function buildActionView(
   );
   return {
     id: actionId,
+    title: action.title,
     to: action.to,
+    toTitle: flow.states[action.to]?.title,
     protocol: action.protocol,
     inputs: {
       observed,

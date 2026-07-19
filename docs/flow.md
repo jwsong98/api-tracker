@@ -142,6 +142,7 @@ observed/saved 풀에 모은다. 이후 action은 풀에 모인 값들을 조합
 ```yaml
 states:
   project_detail:
+    title: "프로젝트 상세"       # 사람용 화면명(선택) — actions/state/visualize 출력에 노출
     route: /projects/:projectId
     load:                       # 화면 진입 시 자동 실행, 한 풀에 데이터 적재
       - operationId: listMembers
@@ -154,6 +155,7 @@ states:
           task: { id: $.body.tasks[*].id, label: $.body.tasks[*].title }
     actions:
       assign_member:            # 풀에서 골라 합성 호출
+        title: "작업 담당자 배정"  # 사람용 행동명(선택)
         to: project_detail
         requires:
           member: { observedAs: member }
@@ -180,8 +182,10 @@ states:
 
 세 명령은 에이전트가 그대로 파싱하도록 **공통 봉투**로 출력한다.
 
-- 공통 머리: `{ "ok": true, "state": { "id", "route", "variant" }, ... }`
-- `actions`: `actions[]` — 각 항목이 `{ id, to, protocol?, inputs: { observed[], manual[] } }`.
+- 공통 머리: `{ "ok": true, "state": { "id", "title"?, "route", "variant" }, ... }`
+  (`title`은 flow.yaml에 선언한 사람용 화면명 — 한국어 등 자유 표기)
+- `actions`: `actions[]` — 각 항목이 `{ id, title?, to, toTitle?, protocol?, inputs: { observed[], manual[] } }`.
+  `title`은 action의 사람용 이름, `toTitle`은 도착 상태의 title.
   `inputs`까지 한 번에 담으므로 행동을 고르려고 `inputs`를 또 호출할 필요가 없다.
   - `observed[]` = `{ input, observedAs, candidates[] }` (이전 응답에서 관측돼 고를 수 있는 값)
   - `manual[]` = `{ name, type?, required, enum?, format?, ... }` (직접 입력해야 하는 값, OpenAPI 스키마 기반)

@@ -13,6 +13,8 @@ export interface FlowConfig {
 
 export interface FlowStateConfig {
   route: string;
+  /** Human-readable screen name (any language) shown alongside the state id. */
+  title?: string;
   variant?: string;
   /**
    * Calls that fire automatically when this screen is entered (on transition in,
@@ -28,6 +30,8 @@ export interface FlowStateConfig {
 }
 
 export interface FlowActionConfig {
+  /** Human-readable action name (any language) shown alongside the action id. */
+  title?: string;
   to: string;
   protocol?: "http" | "ws";
   subscribe?: string;
@@ -146,6 +150,7 @@ export interface FlowSessionState {
 /** A reference to a flow state, used as the common envelope header. */
 export interface FlowStateRef {
   id: string;
+  title?: string;
   route?: string;
   variant?: string;
 }
@@ -168,7 +173,9 @@ export interface ActionInputs {
 /** A fully-described action: what it does plus every input the agent must supply. */
 export interface ActionView {
   id: string;
+  title?: string;
   to: string;
+  toTitle?: string;
   protocol?: "http" | "ws";
   inputs: ActionInputs;
 }
