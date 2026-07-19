@@ -163,6 +163,7 @@ export async function runFlowAction(options: {
   const workingState: FlowSessionState = cloneState(state);
   const context: Record<string, unknown> = {
     ...workingState.saved,
+    saved: workingState.saved,
     ...inputContext,
     manual: manualContext,
     env: process.env,
@@ -295,7 +296,11 @@ async function executeScreenLoad(options: {
   if (loadCalls.length === 0) return [];
   // Load reads from the global pool only — saved values plus env. It has no
   // action inputs or manual values of its own.
-  const context: Record<string, unknown> = { ...workingState.saved, env: process.env };
+  const context: Record<string, unknown> = {
+    ...workingState.saved,
+    saved: workingState.saved,
+    env: process.env,
+  };
   return executeHttpCalls({
     config,
     flow,
