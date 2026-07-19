@@ -3,6 +3,10 @@ import { renderEdge } from "./session-browser.js";
 import type { Edge } from "../types.js";
 import type { ScenarioOverview } from "../scenario/scenario-store.js";
 import type { ScenarioConfig, ScenarioResult, StepStatus } from "../scenario/types.js";
+import type { ExpandedCall, ExpandedScenario } from "../scenario/scenario-expand.js";
+
+/** Resolve a scenario's static API-call expansion (null if flow/ops unavailable). */
+export type ExpandFor = (config: ScenarioConfig) => ExpandedScenario | null;
 
 const C = {
   reset: "\x1b[0m",
@@ -35,11 +39,30 @@ function clear(): void {
 
 // ── Renderers ────────────────────────────────────────────────────────────────
 
+const KIND_ARROW: Record<ExpandedCall["kind"], string> = {
+  action: "→",
+  load: "⤷",
+  goal: "·",
+};
+
+/** Render the API calls behind a step/goal as indented `METHOD path (opId)` lines. */
+function renderCalls(calls: ExpandedCall[], indent: string): string[] {
+  return calls.map((c) => {
+    const arrow = KIND_ARROW[c.kind];
+    const method = (c.method ?? "???").padEnd(4);
+    const where = c.path ?? "(path unknown)";
+    const tag = c.unresolved ? ` ${C.red}NEW${C.reset}` : "";
+    const authTag = c.auth ? ` ${C.dim}[${c.auth}]${C.reset}` : "";
+    const loadTag = c.kind === "load" ? ` ${C.dim}(load)${C.reset}` : "";
+    return `${indent}${C.dim}${arrow}${C.reset} ${C.cyan}${method}${C.reset} ${where} ${C.dim}(${c.operationId})${C.reset}${tag}${authTag}${loadTag}`;
+  });
+}
+
 /**
  * A human checklist of a completed run — the "cognitive-debt" view (design
  * §3.5). Shared with `scenario status/run --human` output.
  */
-export function renderChecklist(r: ScenarioResult): string {
+export function renderChecklist(r: ScenarioResult, expanded?: ExpandedScenario | null): string {
   const badge = r.overall === "green" ? `${C.green}● GREEN${C.reset}` : `${C.red}● RED${C.reset}`;
   const lines: string[] = [];
   lines.push(`${C.bold}${r.ticket}${C.reset}${r.title ? `  ${r.title}` : ""}    attempt ${r.attempt}   ${badge}`);
@@ -57,21 +80,25 @@ export function renderChecklist(r: ScenarioResult): string {
   for (const s of r.steps) {
     const route = s.from && s.to ? `  ${C.dim}${s.from} → ${s.to}${C.reset}` : "";
     lines.push(` ${MARK[s.status]} ${s.id + 1}. ${s.action}${route}`);
+    const calls = expanded?.steps[s.id]?.calls;
+    if (calls?.length) lines.push(...renderCalls(calls, "     "));
     if (s.error) lines.push(`     ${C.red}${s.error.message}${C.reset}`);
   }
 
   if (r.goal.length) {
     lines.push(`${C.dim}GOAL${C.reset}`);
-    for (const g of r.goal) {
+    r.goal.forEach((g, i) => {
       lines.push(` ${MARK[g.status]} ${g.name}`);
+      const call = expanded?.goals[i]?.call;
+      if (call) lines.push(...renderCalls([call], "     "));
       if (g.error) lines.push(`     ${C.red}${g.error.message}${C.reset}`);
-    }
+    });
   }
   return lines.join("\n");
 }
 
 /** A planned (never-run) scenario rendered from its YAML — all steps pending. */
-function renderPlanned(config: ScenarioConfig): string {
+function renderPlanned(config: ScenarioConfig, expanded?: ExpandedScenario | null): string {
   const lines: string[] = [];
   lines.push(`${C.bold}${config.ticket}${C.reset}${config.title ? `  ${config.title}` : ""}    ${C.dim}not run yet${C.reset}`);
   lines.push("─".repeat(60));
@@ -82,12 +109,22 @@ function renderPlanned(config: ScenarioConfig): string {
     for (const b of config.baseline) lines.push(` ${MARK.pending} ${b.operationId}`);
   }
 
-  lines.push(`${C.dim}STEPS${C.reset}`);
-  config.steps.forEach((s, i) => lines.push(` ${MARK.pending} ${i + 1}. ${s.action}`));
+  lines.push(`${C.dim}STEPS${C.reset}${expanded ? `  ${C.dim}(API 흐름 · ${C.red}NEW${C.reset}${C.dim}=미구현 endpoint)${C.reset}` : ""}`);
+  config.steps.forEach((s, i) => {
+    const exp = expanded?.steps[i];
+    const route = exp?.reachable ? `  ${C.dim}${exp.from} → ${exp.to}${C.reset}` : "";
+    lines.push(` ${MARK.pending} ${i + 1}. ${s.action}${route}`);
+    if (exp?.calls.length) lines.push(...renderCalls(exp.calls, "     "));
+    else if (exp && !exp.reachable) lines.push(`     ${C.red}action not reachable from "${exp.from}"${C.reset}`);
+  });
 
   if (config.goal?.length) {
     lines.push(`${C.dim}GOAL${C.reset}`);
-    for (const g of config.goal) lines.push(` ${MARK.pending} ${g.name}`);
+    config.goal.forEach((g, i) => {
+      lines.push(` ${MARK.pending} ${g.name}`);
+      const call = expanded?.goals[i]?.call;
+      if (call) lines.push(...renderCalls([call], "     "));
+    });
   }
   return lines.join("\n");
 }
@@ -130,7 +167,7 @@ function renderList(overviews: ScenarioOverview[], cursor: number): void {
   console.log(hr("═"));
 }
 
-function renderDetail(o: ScenarioOverview): void {
+function renderDetail(o: ScenarioOverview, expandFor?: ExpandFor): void {
   clear();
   console.log(hr("═"));
   const canEdges = Boolean(o.result && (o.result.steps.length || o.result.baseline.length || o.result.goal.length));
@@ -138,10 +175,11 @@ function renderDetail(o: ScenarioOverview): void {
   console.log(`  ${C.dim}[Esc] back${edgeHint}  ${C.dim}[q] quit${C.reset}`);
   console.log(hr("═"));
   console.log();
+  const expanded = o.config && expandFor ? expandFor(o.config) : null;
   const body = o.result
-    ? renderChecklist(o.result)
+    ? renderChecklist(o.result, expanded)
     : o.config
-      ? renderPlanned(o.config)
+      ? renderPlanned(o.config, expanded)
       : `${C.yellow}(scenario YAML could not be parsed: ${o.path})${C.reset}`;
   console.log(body);
   console.log();
@@ -171,6 +209,7 @@ function waitKey(handler: (key: Key) => KeyResult): Promise<Exclude<KeyResult, "
 export async function browseScenarios(
   overviews: ScenarioOverview[],
   loadEdges: (session: string) => Promise<Edge[]>,
+  expandFor?: ExpandFor,
 ): Promise<void> {
   if (overviews.length === 0) {
     console.log("(no scenarios found under scenarios/)");
@@ -226,7 +265,7 @@ export async function browseScenarios(
     // detail loop: allow repeated 'e' drill-ins until Esc/q
     let leaveDetail = false;
     while (!leaveDetail) {
-      renderDetail(selected);
+      renderDetail(selected, expandFor);
       const detailResult = await waitKey((key) => {
         if (key.name === "q" || (key.ctrl && key.name === "c")) return "done";
         if (key.name === "escape" || key.name === "backspace") return "back";

@@ -12,6 +12,10 @@ import {
   resolveScenarioPath,
 } from "../../scenario/scenario-store.js";
 import { browseScenarios, renderChecklist } from "../scenario-browser.js";
+import { expandScenario } from "../../scenario/scenario-expand.js";
+import { loadFlowConfig } from "../../flow/flow-loader.js";
+import { loadOpenApiOperations } from "../../flow/openapi-index.js";
+import type { FlowConfig, OpenApiOperation } from "../../flow/types.js";
 import type { ScenarioConfig, ScenarioResult } from "../../scenario/types.js";
 
 function sanitizeSession(ticket: string): string {
@@ -128,7 +132,35 @@ matchers ({ isUuid: true }, { after: "\${run.startedAt}" }), or a baseline +
     .description("Interactive scenario board → checklist → recorded edges")
     .action(async () => {
       const overviews = await listScenarioOverviews();
-      await browseScenarios(overviews, loadSessionEdges);
+      // Preload the OpenAPI ops + every referenced flow once, so the detail view
+      // can statically expand each step/goal into its API calls without a run.
+      const config = await loadConfig();
+      let operations: Map<string, OpenApiOperation> | null = null;
+      try {
+        operations = await loadOpenApiOperations(config.openapi.specPath);
+      } catch {
+        operations = null;
+      }
+      const flowCache = new Map<string, FlowConfig | null>();
+      const getFlow = async (flowPath: string): Promise<FlowConfig | null> => {
+        if (!flowCache.has(flowPath)) {
+          try {
+            flowCache.set(flowPath, await loadFlowConfig(flowPath));
+          } catch {
+            flowCache.set(flowPath, null);
+          }
+        }
+        return flowCache.get(flowPath) ?? null;
+      };
+      for (const o of overviews) {
+        if (o.config) await getFlow(o.config.flow ?? "flow.yaml");
+      }
+      const expandFor = (scenario: ScenarioConfig) => {
+        const flow = flowCache.get(scenario.flow ?? "flow.yaml");
+        if (!flow || !operations) return null;
+        return expandScenario(scenario, flow, operations);
+      };
+      await browseScenarios(overviews, loadSessionEdges, expandFor);
     });
 
   return scenario;
